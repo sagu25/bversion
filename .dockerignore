@@ -1,0 +1,13 @@
+**/__pycache__
+**/*.pyc
+**/*.pyo
+frontend/node_modules
+frontend/dist
+backend/static
+ml/generate_grid_data.py
+ml/train_model.py
+*.md
+narrate.py
+venv
+.env
+*.log
