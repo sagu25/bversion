@@ -16,6 +16,7 @@ export default defineConfig({
       '/deny': { target: 'http://localhost:8002', changeOrigin: true },
       '/agent': { target: 'http://localhost:8002', changeOrigin: true },
       '/logs': { target: 'http://localhost:8002', changeOrigin: true },
+      '/chat': { target: 'http://localhost:8002', changeOrigin: true },
     },
   },
 })
