@@ -1897,16 +1897,16 @@ html, body {
 .ls-source-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 5px;
-  padding: 10px 10px 6px;
+  gap: 4px;
+  padding: 8px 10px 4px;
   flex-shrink: 0;
 }
 
 .ls-chip {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 8px;
+  gap: 4px;
+  padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid var(--border-dim);
   background: var(--bg-card);
@@ -1938,8 +1938,8 @@ html, body {
 .ls-session-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 4px 10px;
   flex-shrink: 0;
 }
 .ls-stat-chip {
@@ -1962,11 +1962,11 @@ html, body {
 
 /* Latest event */
 .ls-latest-wrap {
-  padding: 8px 12px;
+  padding: 7px 12px;
   flex-shrink: 0;
   border-top: 1px solid var(--border-dim);
   border-bottom: 1px solid var(--border-dim);
-  overflow: visible;
+  min-height: fit-content;
 }
 .ls-latest-label {
   font-family: var(--font-mono);
