@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
+import { narrationEngine, narStart, narStop, narTogglePause, narToggleMute } from './LandingPage'
 
 const SRC_META = {
   GATEWAY:    { icon: '⟳', label: 'GATEWAY',    cls: 'ls-gateway' },
@@ -25,6 +26,21 @@ export default function RightPanel({
 }) {
   const [ddOpen, setDdOpen] = useState(false)
   const ddRef = useRef(null)
+  const [narState, setNarState] = useState({
+    playing: narrationEngine.playing,
+    paused:  narrationEngine.paused,
+    muted:   narrationEngine.muted,
+  })
+
+  useEffect(() => {
+    const sync = () => setNarState({
+      playing: narrationEngine.playing,
+      paused:  narrationEngine.paused,
+      muted:   narrationEngine.muted,
+    })
+    narrationEngine.listeners.push(sync)
+    return () => { narrationEngine.listeners = narrationEngine.listeners.filter(f => f !== sync) }
+  }, [])
 
   const counts = useMemo(() => {
     const c = {}
@@ -92,6 +108,27 @@ export default function RightPanel({
       </div>
 
       <div style={{ flex:1 }} />
+
+      {/* Narration controls */}
+      <div className="rp-narration">
+        <span className="rp-nar-label">🔈 NARRATION</span>
+        <div className="rp-nar-btns">
+          {!narState.playing && (
+            <button className="rp-nar-btn" onClick={() => narStart(narrationEngine.index)} title="Start / Resume narration">▶ Start</button>
+          )}
+          {narState.playing && (
+            <button className="rp-nar-btn" onClick={narTogglePause} title={narState.paused ? 'Resume' : 'Pause'}>
+              {narState.paused ? '▶' : '⏸'}
+            </button>
+          )}
+          {narState.playing && (
+            <button className="rp-nar-btn rp-nar-stop" onClick={narStop} title="Stop">■</button>
+          )}
+          <button className={`rp-nar-btn ${narState.muted ? 'rp-nar-muted' : ''}`} onClick={narToggleMute} title={narState.muted ? 'Unmute' : 'Mute'}>
+            {narState.muted ? '🔇' : '🔊'}
+          </button>
+        </div>
+      </div>
 
       {/* Scenario dropdown + Reset */}
       <div className="rp-actions">
