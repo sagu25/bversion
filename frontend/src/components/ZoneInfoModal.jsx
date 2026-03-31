@@ -177,6 +177,40 @@ export default function ZoneInfoModal({ zoneId, zones, assets, onClose }) {
             {/* Description */}
             <div className="zm3-section-label">What is this zone?</div>
             <p className="zm3-desc">{info.description}</p>
+
+            {/* Agent chips — 2 per row */}
+            {zoneAgentKeys.length > 0 && (
+              <div className="zm3-agents-section">
+                <div className="zm3-section-label" style={{ marginTop: '14px' }}>Active Agents</div>
+                <div className="zm3-agent-chips">
+                  {zoneAgentKeys.map(key => {
+                    const ag = ALL_AGENTS[key]
+                    if (!ag) return null
+                    return (
+                      <div
+                        key={key}
+                        className="zm3-agent-chip"
+                        style={{ borderColor: ag.color + '60', background: ag.color + '12' }}
+                        onMouseEnter={() => setHoveredAgent(key)}
+                        onMouseLeave={() => setHoveredAgent(null)}
+                      >
+                        <span className="zm3-agent-icon">{ag.icon}</span>
+                        <div className="zm3-agent-info">
+                          <span className="zm3-agent-name" style={{ color: ag.color }}>{ag.name}</span>
+                          <span className="zm3-agent-role">{ag.role}</span>
+                        </div>
+                        {hoveredAgent === key && (
+                          <div className="zm3-agent-tooltip">
+                            <div className="zm3-tooltip-name" style={{ color: ag.color }}>{ag.icon} {ag.name}</div>
+                            <div className="zm3-tooltip-desc">{ag.desc}</div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -205,38 +239,6 @@ export default function ZoneInfoModal({ zoneId, zones, assets, onClose }) {
                 </div>
               )
             })}
-          </div>
-
-          {/* Agent chips */}
-          <div className="zm3-agents-section">
-            <div className="zm3-section-label" style={{ marginTop: '14px' }}>Active Agents</div>
-            <div className="zm3-agent-chips">
-              {zoneAgentKeys.map(key => {
-                const ag = ALL_AGENTS[key]
-                if (!ag) return null
-                return (
-                  <div
-                    key={key}
-                    className="zm3-agent-chip"
-                    style={{ borderColor: ag.color + '60', background: ag.color + '12' }}
-                    onMouseEnter={() => setHoveredAgent(key)}
-                    onMouseLeave={() => setHoveredAgent(null)}
-                  >
-                    <span className="zm3-agent-icon">{ag.icon}</span>
-                    <div className="zm3-agent-info">
-                      <span className="zm3-agent-name" style={{ color: ag.color }}>{ag.name}</span>
-                      <span className="zm3-agent-role">{ag.role}</span>
-                    </div>
-                    {hoveredAgent === key && (
-                      <div className="zm3-agent-tooltip">
-                        <div className="zm3-tooltip-name" style={{ color: ag.color }}>{ag.icon} {ag.name}</div>
-                        <div className="zm3-tooltip-desc">{ag.desc}</div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
           </div>
         </div>
 
