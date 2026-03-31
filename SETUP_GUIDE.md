@@ -130,7 +130,7 @@ All six scenarios are in the **▶ Scenarios** dropdown on the right panel.
 | Scenario | Action after clicking |
 |---|---|
 | 🟢 GRID DOCTOR | Watch Zone 3 heal. All ALLOW. Click Reset. |
-| 🔴 GONE ROGUE | Watch TARE fire. Click **Deny** in TARE Assistant. Click Reset. |
+| 🔴 GONE ROGUE | Watch TARE fire. Click **Deny** in Ask TARE. Click Reset. |
 | 👻 GHOST CLONE | Watch all commands denied instantly at auth. Click Reset. |
 | 🔺 SCOPE CREEP | Watch pivot mid-session. Click **Approve** to show blast-radius containment. Click Reset. |
 | 🕳 SILENT RECON | Rules stay silent, ML fires. Click **Deny**. Click Reset. |
@@ -169,8 +169,23 @@ Live SVG grid map. Click any zone to open the **Zone Info Modal**:
 
 ### Bottom Tabs
 - **🛡 Command Gateway** — every command with ALLOW/DENY, policy, zone, asset
-- **💬 TARE Assistant** — LLM-written supervisor briefing + Approve/Deny buttons
+- **💬 Ask TARE** — LLM-written supervisor briefing + Approve/Deny buttons + chat interface
 - **📋 Activity** — real-time feed with local timestamps
+
+### Ask TARE — Chat Interface
+Type any question about session activity or historical data:
+
+| Question type | Example | Source |
+|---|---|---|
+| Current session | "Any rogue agents?" | Live engine snapshot |
+| Current session | "Show session summary" | Live engine snapshot |
+| Current session | "Any freeze events?" | Live engine snapshot |
+| Historical | "How many rogue agents in the past 30 days?" | 30-day audit data |
+| Historical | "Any scope creep last month?" | 30-day audit data |
+| Historical | "Identity mismatches recently?" | 30-day audit data |
+| Historical | "ML anomalies this week?" | 30-day audit data |
+
+**Keywords that trigger historical mode:** *past, last, days, weeks, months, history, recently, till now, so far*
 
 ---
 
@@ -191,7 +206,7 @@ Scenario mapping:
 
 ## Supervisor Decision Buttons
 
-Appear in the TARE Assistant tab when TARE fires:
+Appear in the Ask TARE tab when TARE fires:
 
 | Button | When to use | What happens |
 |---|---|---|
