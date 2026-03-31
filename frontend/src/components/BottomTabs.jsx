@@ -48,7 +48,7 @@ export default function BottomTabs({ gatewayLog, chatMsgs, feedItems, showApprov
           className={`ptab ${tab === 'chat' ? 'ptab-active' : ''} ${hasApprove ? 'ptab-alert' : ''}`}
           onClick={() => switchTab('chat')}
         >
-          💬 TARE Assistant
+          💬 Ask TARE
           {hasApprove && <span className="ptab-dot ptab-dot-amber" />}
         </button>
         <button

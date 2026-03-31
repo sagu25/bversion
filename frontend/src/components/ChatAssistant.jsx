@@ -56,7 +56,7 @@ export default function ChatAssistant({ messages, showApprove, onApprove, onDeny
 
   return (
     <div className="panel chat-panel">
-      <div className="panel-title"><span className="panel-icon">💬</span> TARE Assistant</div>
+      <div className="panel-title"><span className="panel-icon">💬</span> Ask TARE</div>
 
       <div className="chat-body">
         {allMsgs.length === 0 && (
