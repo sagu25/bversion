@@ -2339,6 +2339,7 @@ html, body {
 .zone-modal-3col {
   display: grid;
   grid-template-columns: 420px 1fr 300px;
+  grid-template-rows: auto 1fr;
   width: min(1300px, 96vw);
   height: min(560px, 88vh);
   background: var(--bg-panel);
@@ -2362,7 +2363,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 14px;
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
@@ -2372,6 +2375,7 @@ html, body {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-dim);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 /* Close button in header */
