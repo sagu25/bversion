@@ -2730,3 +2730,247 @@ html, body {
 
 .narbar-btn-muted  { border-color: #f59e0b55; }
 .narbar-btn-toggle { font-size: 0.5rem; padding: 4px 8px; }
+
+/* ════════════════════════════════════════════════════════════════
+   AGENT PANEL — Zone 3 Reef + BARRIER
+   ════════════════════════════════════════════════════════════════ */
+
+.agent-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* Zone header row */
+.agent-zone-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 2px;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 2px;
+}
+.azh-badge {
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+}
+.azh-badge.z3 { background: #00d4ff22; color: #00d4ff; border: 1px solid #00d4ff44; }
+.azh-badge.z4 { background: #00b8e622; color: #00b8e6; border: 1px solid #00b8e644; }
+.azh-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+.azh-sub { font-size: 0.62rem; color: var(--text-secondary); margin-left: auto; }
+
+/* 2×2 agent grid */
+.agent-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* Individual agent card */
+.agent-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--r);
+  padding: 8px 8px 7px;
+  transition: border-color 0.25s, box-shadow 0.25s;
+  overflow: hidden;
+  min-height: 88px;
+}
+.agent-card-active {
+  background: #0a1a2e;
+  animation: card-breathe 1.8s ease-in-out infinite;
+}
+@keyframes card-breathe {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.88; }
+}
+
+/* Pulse ring */
+.agent-pulse-ring {
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--r);
+  border: 1.5px solid;
+  animation: pulse-ring 1.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes pulse-ring {
+  0%   { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(1.04); }
+}
+
+/* Card top row */
+.ac-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.ac-icon { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+.ac-names { flex: 1; min-width: 0; }
+.ac-name {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  transition: color 0.2s;
+}
+.ac-role {
+  display: block;
+  font-size: 0.58rem;
+  color: var(--text-secondary);
+  margin-top: 1px;
+  line-height: 1.3;
+}
+
+/* Status pill */
+.ac-status {
+  font-size: 0.56rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ac-status-active { color: #00e87c; animation: status-pulse 1s ease-in-out infinite alternate; }
+.ac-status-sleep  { color: var(--text-dim); }
+@keyframes status-pulse { from { opacity: 0.7; } to { opacity: 1; } }
+
+/* Task line (shown when active) */
+.ac-task {
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
+/* Description (shown when sleeping) */
+.ac-desc {
+  font-size: 0.59rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* Stat row */
+.ac-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-dim);
+}
+.ac-stat-label { font-size: 0.57rem; color: var(--text-secondary); }
+.ac-stat-val   { font-size: 0.62rem; font-family: var(--font-mono); color: var(--accent-blue); font-weight: 600; }
+
+/* BARRIER card */
+.barrier-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.barrier-active { animation: card-breathe 1.8s ease-in-out infinite; }
+
+.bc-left  { display: flex; align-items: center; gap: 8px; }
+.bc-icon  { font-size: 1.1rem; }
+.bc-names {}
+.bc-name  { display: block; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; color: var(--text-primary); letter-spacing: 0.06em; transition: color 0.2s; }
+.bc-role  { display: block; font-size: 0.58rem; color: var(--text-secondary); margin-top: 1px; }
+.bc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.bc-mode  { font-size: 0.6rem; color: var(--text-secondary); font-family: var(--font-mono); }
+
+/* Agent activity log */
+.agent-log-header {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  padding: 6px 2px 3px;
+  border-top: 1px solid var(--border-dim);
+  margin-top: 4px;
+}
+.agent-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.al-row {
+  display: grid;
+  grid-template-columns: 52px 12px 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--bg-card2);
+  font-size: 0.58rem;
+}
+.al-agent  { font-family: var(--font-mono); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.al-action { color: var(--text-secondary); font-size: 0.55rem; }
+.al-task   { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-ts     { font-family: var(--font-mono); color: var(--text-dim); font-size: 0.55rem; white-space: nowrap; }
+
+/* 4-tab layout fix — make tabs fit */
+.panel-tabs { flex-wrap: wrap; }
+.panel-tabs .ptab { flex: 1; min-width: 0; font-size: 0.65rem; padding: 5px 4px; }
+
+/* Zone 2 & 1 badges */
+.azh-badge.z2 { background: #fb923c22; color: #fb923c; border: 1px solid #fb923c44; }
+.azh-badge.z1 { background: #f43f5e22; color: #f43f5e; border: 1px solid #f43f5e44; }
+
+/* Active dot on zone header */
+.azh-active-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #00e87c;
+  box-shadow: 0 0 6px rgba(0,232,124,0.8);
+  margin-left: auto;
+  animation: status-pulse 1s ease-in-out infinite alternate;
+}
+
+/* Agent panel summary bar */
+.ap-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 2px 6px;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 4px;
+}
+.ap-sum-label { font-size: 0.62rem; color: var(--text-secondary); font-family: var(--font-mono); }
+.ap-sum-active {
+  font-size: 0.6rem; font-family: var(--font-mono); font-weight: 700;
+  color: #00e87c; background: rgba(0,232,124,0.1);
+  border: 1px solid rgba(0,232,124,0.3);
+  border-radius: 3px; padding: 1px 6px;
+  animation: status-pulse 1s ease-in-out infinite alternate;
+}
+
+/* Pipeline log row */
+.pipeline-row { background: rgba(0,212,255,0.04); }

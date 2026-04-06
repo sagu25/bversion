@@ -1,50 +1,99 @@
 """
 LEVIER — Rollback & Recovery Agent (Zone 1 / Trench)
 
-Responsible for reverting changes and restoring systems to a safe state
-if execution fails, TEMPEST issues a freeze, or AEGIS vetoes mid-operation.
+Wakes only when TRITON fails, AEGIS vetoes, or TEMPEST triggers a freeze.
+Executes rollback steps from the NAVIS plan in reverse to restore safe state.
+Never initiates new actions — only stabilises and recovers.
 
-LEVIER never initiates new actions. It only stabilizes and recovers.
-It works from the execution plan's rollback steps produced by NAVIS.
-
-Wake pattern: activated only when TRITON reports a failure, TEMPEST
-fires a mid-session freeze, or AEGIS issues a veto. Sleeps otherwise.
-
-Phase 2 scope — stub implemented, full rollback engine pending.
+Rollback steps are produced by NAVIS (e.g., CLOSE_BREAKER if OPEN_BREAKER ran).
+LEVIER executes them via the same engine callback TRITON uses.
 """
+from datetime import datetime
 
 
 class LEVIER:
     NAME = "LEVIER"
     ZONE = "Zone 1 — Trench"
     ROLE = "Rollback & Recovery Agent"
-    DESCRIPTION = "Reverts changes and restores safe state on execution failure. Never initiates new actions."
+    DESCRIPTION = "Reverts executed steps to restore safe state. Only wakes on failure."
 
     def __init__(self):
-        self._active          = False
-        self._last_recovery   = None
+        self._active        = False
+        self._last_recovery = None
+        self._execute_fn    = None
 
     @property
     def active(self) -> bool:
         return self._active
 
-    def rollback(self, rollback_steps: list, assets: dict, zones: dict) -> dict:
+    def arm(self, execute_fn) -> None:
+        """Give LEVIER the execute callback so it can revert steps if needed."""
+        self._execute_fn = execute_fn
+
+    def rollback(self, rollback_steps: list, completed_steps: list = None) -> dict:
         """
-        Execute rollback steps to restore system to pre-execution state.
-        Works from the rollback plan produced by NAVIS.
-        Full implementation: Phase 2 (real SCADA state restore).
+        Execute rollback steps in order to undo what TRITON completed.
+        rollback_steps : from NAVIS plan [{command, asset_id, zone, rationale}]
+        completed_steps: which TRITON steps actually ran (only roll those back)
+
+        Returns a recovery report.
         """
         self._active = True
-        result = {
-            "steps_planned":  len(rollback_steps),
-            "steps_executed": 0,
-            "status":         "STUB — Phase 2",
+        completed_steps = completed_steps or []
+        results = []
+        errors  = []
+
+        # Only roll back steps that actually executed
+        # Match by asset_id — if TRITON ran OPEN_BREAKER on BRK-301, LEVIER runs CLOSE_BREAKER on BRK-301
+        executed_assets = {s.get("asset_id") for s in completed_steps if s.get("status") == "EXECUTED"}
+        steps_to_run = [s for s in rollback_steps if s.get("asset_id") in executed_assets] if executed_assets else rollback_steps
+
+        for step in steps_to_run:
+            cmd      = step.get("command")
+            asset_id = step.get("asset_id")
+            zone     = step.get("zone")
+
+            if not cmd or not asset_id or not zone:
+                errors.append(f"Incomplete rollback step: {step}")
+                continue
+
+            try:
+                if self._execute_fn:
+                    result = self._execute_fn(cmd, asset_id, zone)
+                    results.append({
+                        "command":   cmd,
+                        "asset_id":  asset_id,
+                        "zone":      zone,
+                        "decision":  result.get("decision"),
+                        "status":    "ROLLED_BACK",
+                    })
+                else:
+                    results.append({
+                        "command":  cmd,
+                        "asset_id": asset_id,
+                        "zone":     zone,
+                        "status":   "NO_EXECUTE_FN",
+                    })
+            except Exception as e:
+                errors.append(f"{cmd} on {asset_id}: {e}")
+
+        recovery = {
+            "steps_planned":  len(steps_to_run),
+            "steps_executed": len(results),
+            "results":        results,
+            "errors":         errors,
+            "status":         "COMPLETE" if not errors else "PARTIAL",
             "recovered_by":   self.NAME,
-            "note":           "Rollback engine stub — Phase 2.",
+            "timestamp":      datetime.now().isoformat(),
         }
-        self._last_recovery = result
+        self._last_recovery = recovery
         self._active        = False
-        return result
+        return recovery
+
+    def reset(self):
+        self._active        = False
+        self._last_recovery = None
+        self._execute_fn    = None
 
     def status(self) -> dict:
         return {
@@ -53,6 +102,5 @@ class LEVIER:
             "role":          self.ROLE,
             "description":   self.DESCRIPTION,
             "active":        self._active,
-            "phase":         "Phase 2 — Stub",
             "last_recovery": self._last_recovery,
         }

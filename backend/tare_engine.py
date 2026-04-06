@@ -1,21 +1,27 @@
 """
 TARE Engine — Trusted Access Response Engine
-Central orchestrator of the multi-agent security system.
+Central orchestrator of the full 12-agent security system.
 
 TARE decides. TARE never executes.
 Agents wake, do their part, and go back to sleep.
 
-Agent activation flow (normal command):
-    Every command  →  KORAL observes  →  BARRIER enforces
-    If mode NORMAL →  MAREA analyzes  →  TASYA correlates
-    If ≥2 signals  →  NEREUS recommends  →  TARE decides FREEZE
-                   →  BARRIER.set_mode("FREEZE")  →  ServiceNow  →  LLM brief
+Detection flow (every command):
+    KORAL observes → BARRIER enforces
+    If NORMAL: MAREA analyzes → TASYA correlates
+    If ≥2 signals: NEREUS recommends → TARE decides FREEZE
+    BARRIER.set_mode("FREEZE") → ServiceNow → LLM brief → Approve/Deny UI
 
-Zones implemented:
+Post-approval pipeline (Zone 2 → Zone 1):
+    ECHO diagnoses → SIMAR simulates → NAVIS plans → RISKADOR scores
+    → TARE issues permit → TRITON arms + AEGIS arms + TEMPEST arms + LEVIER arms
+    → For each step: AEGIS validates → TRITON executes → TEMPEST monitors
+    → On failure: LEVIER rolls back
+
+All 4 zones:
     Zone 3 (Reef)  — KORAL, MAREA, TASYA, NEREUS   [Observe & Recommend]
-    Zone 4         — BARRIER                         [Policy Enforcement]
-
-Zone 2 (Shelf) and Zone 1 (Trench) agents are documented — future scope.
+    Zone 2 (Shelf) — ECHO, SIMAR, NAVIS, RISKADOR   [Diagnose & Prepare]
+    Zone 1 (Trench)— TRITON, AEGIS, TEMPEST, LEVIER  [Execute with Safety]
+    Zone 4         — BARRIER                          [Policy Enforcement]
 """
 import time
 import threading
@@ -156,6 +162,10 @@ class TAREEngine:
             self.koral.clear()
             self.marea.clear_sim_tracker()
             self.barrier.reset()
+            self.aegis.reset()
+            self.tempest.reset()
+            self.triton.reset()
+            self.levier.reset()
 
         self._broadcast({"type": "RESET", "message": "System reset. All zones nominal. TARE in NORMAL mode."})
         self._broadcast(self._snapshot())
@@ -310,6 +320,8 @@ class TAREEngine:
         })
         self._broadcast(self._snapshot())
         self._start_countdown(duration_minutes * 60)
+        # Kick off Zone 2 → Zone 1 pipeline in background
+        threading.Thread(target=self._run_pipeline, daemon=True).start()
 
     def deny_timebox(self):
         with self._lock:
@@ -364,6 +376,191 @@ class TAREEngine:
                 time.sleep(0.4)
                 self.process_command(cmd, asset, z, skip_sim=skip)
         threading.Thread(target=_seq, daemon=True).start()
+
+    # ── Zone 2 → Zone 1 Pipeline ─────────────────────────────────────────
+
+    def _run_pipeline(self):
+        """
+        Full post-approval pipeline.
+        Runs in a background thread after supervisor approves the timebox.
+
+        Zone 2 (Diagnose & Prepare):
+            ECHO → SIMAR → NAVIS → RISKADOR
+
+        Zone 1 (Execute with Safety):
+            TRITON + AEGIS + TEMPEST + LEVIER (on failure)
+        """
+        time.sleep(0.8)   # let timebox broadcast settle
+
+        # Snapshot current state (thread-safe read)
+        with self._lock:
+            signals    = list(self.anomaly_signals)
+            zones_snap = {k: dict(v) for k, v in self.zones.items()}
+            assets_snap= {k: dict(v) for k, v in self.assets.items()}
+            gw_log     = list(self.gateway_log)
+            agent_snap = dict(self.agent)
+
+        self._broadcast({"type": "CHAT_MESSAGE", "role": "system",
+            "message": "Supervisor approved. Activating Zone 2 (Shelf) — ECHO, SIMAR, NAVIS, RISKADOR preparing controlled execution plan..."})
+
+        # ── ECHO: Diagnose ────────────────────────────────────────────────
+        time.sleep(1.0)
+        self._broadcast_agent_wake("ECHO", "Diagnosing fault zones and target assets")
+        echo_result = self.echo.diagnose(signals, zones_snap, assets_snap, gw_log, agent_snap)
+        self._broadcast_agent_sleep("ECHO")
+        self._broadcast({"type": "PIPELINE_UPDATE", "agent": "ECHO",
+            "result": echo_result, "message": echo_result["findings"]})
+
+        if not echo_result["confirmed"]:
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": "ECHO could not confirm a viable repair target. No execution plan will be built. System remains in TIMEBOX_ACTIVE mode — manual operator action required."})
+            return
+
+        # ── SIMAR: Simulate ───────────────────────────────────────────────
+        time.sleep(1.2)
+        self._broadcast_agent_wake("SIMAR", "Simulating proposed repair actions")
+        simar_result = self.simar.simulate(echo_result["repair_actions"], zones_snap, assets_snap)
+        self._broadcast_agent_sleep("SIMAR")
+        self._broadcast({"type": "PIPELINE_UPDATE", "agent": "SIMAR",
+            "result": simar_result, "message": simar_result["summary"]})
+
+        if not simar_result["safe_to_proceed"]:
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"SIMAR simulation identified risks: {simar_result['risk_indicators']}. Execution plan aborted. System remains in TIMEBOX_ACTIVE — manual intervention required."})
+            return
+
+        # ── NAVIS: Plan ───────────────────────────────────────────────────
+        time.sleep(1.0)
+        self._broadcast_agent_wake("NAVIS", "Building NERC CIP-compliant execution plan")
+        plan = self.navis.build_plan(echo_result, simar_result, zones_snap, assets_snap, agent_snap)
+        self._broadcast_agent_sleep("NAVIS")
+        self._broadcast({"type": "PIPELINE_UPDATE", "agent": "NAVIS",
+            "result": plan, "message": f"Plan ready: {plan['goal']} — {len(plan['steps'])} step(s)"})
+
+        if not plan["ready"]:
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"NAVIS could not build a viable plan: {plan.get('reason','unknown')}. Manual action required."})
+            return
+
+        # ── RISKADOR: Score ───────────────────────────────────────────────
+        time.sleep(1.0)
+        self._broadcast_agent_wake("RISKADOR", "Scoring plan — blast radius, reversibility, confidence")
+        risk = self.riskador.score(plan, zones_snap, assets_snap, echo_result)
+        self._broadcast_agent_sleep("RISKADOR")
+        self._broadcast({"type": "PIPELINE_UPDATE", "agent": "RISKADOR",
+            "result": risk, "message": f"Risk score {risk['composite_score']}/100 — {risk['recommendation']}: {risk['rationale']}"})
+
+        if risk["recommendation"] == "HOLD":
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"RISKADOR scored this plan {risk['composite_score']}/100 — HOLD. Risk too high to proceed autonomously. Manual operator action required."})
+            return
+
+        # ── Zone 1: Execute ───────────────────────────────────────────────
+        time.sleep(0.8)
+        self._broadcast({"type": "CHAT_MESSAGE", "role": "system",
+            "message": f"Zone 2 complete. Activating Zone 1 (Trench) — TRITON, AEGIS, TEMPEST ready. Executing {len(plan['steps'])} step(s) under strict safety guardrails..."})
+
+        # Arm Zone 1 agents
+        def _tempest_freeze(reason):
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"TEMPEST triggered emergency freeze mid-execution: {reason}"})
+            with self._lock:
+                self._set_mode("SAFE")
+                self.barrier.set_mode("SAFE")
+            self.triton.revoke()
+            self._broadcast(self._snapshot())
+
+        permit = {
+            "scope":            plan["goal"],
+            "allowed_commands": list({s["command"] for s in plan["steps"]}),
+            "issued_at":        datetime.now().isoformat(),
+            "issued_by":        "TARE",
+        }
+
+        self.triton.arm(
+            execute_fn=lambda cmd, asset, zone: self.process_command(cmd, asset, zone),
+            permit=permit,
+        )
+        self.aegis.reset()
+        self.tempest.arm(plan_steps=plan["steps"], freeze_callback=_tempest_freeze)
+        self.levier.arm(execute_fn=lambda cmd, asset, zone: self.process_command(cmd, asset, zone))
+
+        self._broadcast_agent_wake("TEMPEST", "Armed — monitoring execution tempo")
+
+        completed_steps = []
+        aborted = False
+
+        for step in plan["steps"]:
+            # Check timebox is still active
+            with self._lock:
+                current_mode = self.mode
+            if current_mode != "TIMEBOX_ACTIVE":
+                self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                    "message": f"Execution halted — TARE mode changed to {current_mode} mid-pipeline."})
+                aborted = True
+                break
+
+            time.sleep(1.8)   # realistic inter-step pacing
+
+            cmd      = step["command"]
+            asset_id = step["asset_id"]
+            zone     = step["zone"]
+
+            # AEGIS validates
+            self._broadcast_agent_wake("AEGIS", f"Validating step {step['step_num']}: {cmd} on {asset_id}")
+            with self._lock:
+                current_assets = {k: dict(v) for k, v in self.assets.items()}
+                current_zones  = {k: dict(v) for k, v in self.zones.items()}
+            aegis_result = self.aegis.validate(cmd, asset_id, zone, current_assets, current_zones)
+            self._broadcast_agent_sleep("AEGIS")
+            self._broadcast({"type": "PIPELINE_UPDATE", "agent": "AEGIS",
+                "result": aegis_result,
+                "message": f"Step {step['step_num']} {'CLEARED' if aegis_result['passed'] else 'VETOED'}: {cmd} — {aegis_result.get('veto_reason') or 'all checks passed'}"})
+
+            if not aegis_result["passed"]:
+                self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                    "message": f"AEGIS vetoed step {step['step_num']} ({cmd} on {asset_id}): {aegis_result['veto_reason']}. Execution stopped — initiating rollback."})
+                aborted = True
+                break
+
+            # TRITON executes
+            self._broadcast_agent_wake("TRITON", f"Executing step {step['step_num']}: {cmd} on {asset_id} ({zone})")
+            exec_result = self.triton.execute_step(cmd, asset_id, zone)
+            self._broadcast_agent_sleep("TRITON")
+            self._broadcast({"type": "PIPELINE_UPDATE", "agent": "TRITON",
+                "result": exec_result,
+                "message": f"Step {step['step_num']} {exec_result.get('status','?')}: {cmd} → {exec_result.get('decision','?')}"})
+
+            if exec_result.get("status") == "EXECUTED":
+                completed_steps.append(exec_result)
+
+            # TEMPEST records
+            tempo = self.tempest.record_step(cmd, asset_id, exec_result)
+            if not tempo["tempo_ok"]:
+                aborted = True
+                break
+
+        # Disarm Zone 1
+        self._broadcast_agent_sleep("TEMPEST")
+        self.tempest.disarm()
+        self.triton.revoke()
+
+        # Rollback if aborted
+        if aborted and plan["rollback"] and completed_steps:
+            time.sleep(0.5)
+            self._broadcast_agent_wake("LEVIER", f"Rolling back {len(completed_steps)} executed step(s)")
+            recovery = self.levier.rollback(plan["rollback"], completed_steps)
+            self._broadcast_agent_sleep("LEVIER")
+            self._broadcast({"type": "PIPELINE_UPDATE", "agent": "LEVIER",
+                "result": recovery,
+                "message": f"Rollback {recovery['status']} — {recovery['steps_executed']}/{recovery['steps_planned']} steps reverted"})
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"LEVIER completed rollback — {recovery['steps_executed']} step(s) reverted. System is in a safe known state."})
+        elif not aborted:
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"Execution complete. All {len(completed_steps)} step(s) executed successfully under Zone 1 guardrails. Full audit trail logged."})
+
+        self._broadcast(self._snapshot())
 
     # ── Internal: Identity Mismatch ───────────────────────────────────────────
 

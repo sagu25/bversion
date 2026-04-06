@@ -1,40 +1,41 @@
 """
 TEMPEST — Session & Tempo Monitor (Zone 1 / Trench)
 
-Monitors execution pace, retries, and anomalies during live actions.
-Arms when TRITON begins executing and watches every step.
-Can trigger an immediate freeze if behavior becomes unsafe mid-operation —
-even during an approved, time-boxed session.
+Arms when TRITON begins executing. Watches every step during live execution.
+Can trigger an immediate freeze if behaviour becomes unsafe mid-operation.
 
-TEMPEST is the last line of defence during live execution.
-It can override an active permit if the session drifts from expected behavior.
+Violations that trigger a freeze:
+  - Steps executing too fast (< MIN_INTER_STEP_SECONDS between steps)
+  - Too many steps in one session (> MAX_STEPS_PER_SESSION)
+  - Command deviates from the approved NAVIS plan
+  - Too many retries on the same step (> MAX_RETRIES_PER_STEP)
 
-Wake pattern: arms when TRITON receives a permit. Stays active for the
-duration of the execution session. Disarms when permit expires or is revoked.
-
-Phase 2 scope — stub implemented, full tempo monitoring pending.
+TEMPEST is the last line of defence. Even an approved, time-boxed session
+can be frozen if execution pace becomes abnormal.
 """
 import time
+from datetime import datetime
 
 
-# Thresholds (Phase 2 will tune these per asset class)
-MAX_RETRIES_PER_STEP    = 3
-MIN_INTER_STEP_SECONDS  = 1.0
-MAX_STEPS_PER_SESSION   = 10
+MIN_INTER_STEP_SECONDS = 1.0
+MAX_STEPS_PER_SESSION  = 15
+MAX_RETRIES_PER_STEP   = 2
 
 
 class TEMPEST:
     NAME = "TEMPEST"
     ZONE = "Zone 1 — Trench"
     ROLE = "Session & Tempo Monitor"
-    DESCRIPTION = "Monitors execution pace and anomalies during live actions. Can freeze mid-operation."
+    DESCRIPTION = "Monitors execution pace mid-operation. Can freeze a session if tempo is violated."
 
     def __init__(self):
         self._active       = False
         self._armed        = False
         self._step_times   = []
-        self._retry_count  = 0
-        self._freeze_fn    = None    # callback to TARE freeze if tempo violated
+        self._step_log     = []
+        self._retry_counts = {}   # command → count
+        self._freeze_fn    = None
+        self._plan_steps   = []   # approved step list from NAVIS
 
     @property
     def active(self) -> bool:
@@ -44,50 +45,98 @@ class TEMPEST:
     def armed(self) -> bool:
         return self._armed
 
-    def arm(self, freeze_callback=None) -> None:
-        """
-        Arm TEMPEST for a new execution session.
-        freeze_callback: callable that triggers TARE freeze if tempo is violated.
-        """
-        self._armed       = True
-        self._active      = True
-        self._step_times  = []
-        self._retry_count = 0
-        self._freeze_fn   = freeze_callback
+    def arm(self, plan_steps: list = None, freeze_callback=None) -> None:
+        """Arm TEMPEST at the start of a TRITON execution session."""
+        self._armed        = True
+        self._active       = True
+        self._step_times   = []
+        self._step_log     = []
+        self._retry_counts = {}
+        self._freeze_fn    = freeze_callback
+        self._plan_steps   = plan_steps or []
 
     def disarm(self) -> None:
-        """Disarm at end of execution session."""
-        self._armed   = False
-        self._active  = False
+        """Disarm at end of session — TRITON completed or was cancelled."""
+        self._armed  = False
+        self._active = False
 
-    def record_step(self, command: str, result: dict) -> dict:
+    def record_step(self, command: str, asset_id: str, result: dict) -> dict:
         """
-        Record an execution step. Check tempo and retry patterns.
-        Returns assessment. Triggers freeze if anomaly detected.
-        Full implementation: Phase 2.
+        Record a TRITON execution step and check all tempo rules.
+        Returns assessment. Triggers freeze callback if any rule is violated.
         """
         now = time.time()
+        step_num = len(self._step_times) + 1
+        violations = []
+
+        # Rule 1: too fast
+        if self._step_times:
+            gap = now - self._step_times[-1]
+            if gap < MIN_INTER_STEP_SECONDS:
+                violations.append(
+                    f"Step {step_num} too fast — {gap:.2f}s since last step (min: {MIN_INTER_STEP_SECONDS}s)"
+                )
+
+        # Rule 2: too many steps
+        if step_num > MAX_STEPS_PER_SESSION:
+            violations.append(
+                f"Session step count {step_num} exceeds maximum {MAX_STEPS_PER_SESSION}"
+            )
+
+        # Rule 3: retry exceeded
+        self._retry_counts[command] = self._retry_counts.get(command, 0) + 1
+        if self._retry_counts[command] > MAX_RETRIES_PER_STEP:
+            violations.append(
+                f"Command {command} retried {self._retry_counts[command]} times (max: {MAX_RETRIES_PER_STEP})"
+            )
+
+        # Rule 4: command not in approved plan
+        if self._plan_steps:
+            approved_commands = {s["command"] for s in self._plan_steps}
+            if command not in approved_commands:
+                violations.append(
+                    f"Command {command} is not in the approved NAVIS plan"
+                )
+
         self._step_times.append(now)
 
+        tempo_ok = len(violations) == 0
         assessment = {
-            "command":       command,
-            "step_count":    len(self._step_times),
-            "tempo_ok":      True,
-            "retry_ok":      True,
-            "freeze_issued": False,
-            "monitored_by":  self.NAME,
-            "note":          "Tempo monitoring stub — Phase 2.",
+            "step_num":     step_num,
+            "command":      command,
+            "asset_id":     asset_id,
+            "tempo_ok":     tempo_ok,
+            "violations":   violations,
+            "freeze_issued":False,
+            "monitored_by": self.NAME,
+            "timestamp":    datetime.now().isoformat(),
         }
+
+        # Trigger freeze if tempo violated
+        if violations and self._freeze_fn:
+            assessment["freeze_issued"] = True
+            self._freeze_fn(f"TEMPEST freeze — {'; '.join(violations)}")
+
+        self._step_log.append(assessment)
         return assessment
+
+    def reset(self):
+        self._armed        = False
+        self._active       = False
+        self._step_times   = []
+        self._step_log     = []
+        self._retry_counts = {}
+        self._freeze_fn    = None
+        self._plan_steps   = []
 
     def status(self) -> dict:
         return {
-            "name":        self.NAME,
-            "zone":        self.ZONE,
-            "role":        self.ROLE,
-            "description": self.DESCRIPTION,
-            "active":      self._active,
-            "phase":       "Phase 2 — Stub",
-            "armed":       self._armed,
+            "name":           self.NAME,
+            "zone":           self.ZONE,
+            "role":           self.ROLE,
+            "description":    self.DESCRIPTION,
+            "active":         self._active,
+            "armed":          self._armed,
             "steps_recorded": len(self._step_times),
+            "step_log":       self._step_log[-5:],
         }

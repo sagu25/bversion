@@ -59,6 +59,11 @@ export default function App() {
   const [zoneModal,      setZoneModal]      = useState(null)
   const [scenarioActive, setScenarioActive] = useState(false)
   const [showLanding,    setShowLanding]    = useState(true)
+  // ── Agent state ──────────────────────────────────────────────────
+  const [agentStates,    setAgentStates]    = useState({})
+  const [activeAgents,   setActiveAgents]   = useState({})
+  const [agentLog,       setAgentLog]       = useState([])
+  const [pipelineLog,    setPipelineLog]    = useState([])
   const wsRef         = useRef(null)
   const prevModeRef   = useRef('NORMAL')
   const firstConnRef  = useRef(true)
@@ -74,10 +79,14 @@ export default function App() {
 
   const handleMsg = useCallback((msg) => {
     switch (msg.type) {
-      case 'STATE_SNAPSHOT':  setSnap(msg); break
+      case 'STATE_SNAPSHOT':
+        setSnap(msg)
+        if (msg.agent_states) setAgentStates(msg.agent_states)
+        break
       case 'RESET':
         setSnap(INITIAL_STATE); setChatMsgs([]); setFeedItems([])
         setShowApprove(false); setScenarioActive(false)
+        setActiveAgents({}); setAgentLog([]); setPipelineLog([])
         addFeed('info', 'TARE', msg.message); break
       case 'GATEWAY_DECISION': {
         const lvl = msg.decision === 'ALLOW' ? 'info' : 'danger'
@@ -104,6 +113,21 @@ export default function App() {
         setSnap(prev => ({ ...prev, timebox_remaining: msg.remaining_seconds })); break
       case 'TIMEBOX_EXPIRED':
         addFeed('warning', 'TARE', msg.message); break
+      case 'AGENT_WAKE': {
+        const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+        setActiveAgents(prev => ({ ...prev, [msg.agent]: { task: msg.task, ts } }))
+        setAgentLog(prev => [{ agent: msg.agent, action: 'wake', task: msg.task, ts }, ...prev].slice(0, 40))
+        addFeed('info', msg.agent, `▶ ${msg.task}`)
+        break
+      }
+      case 'AGENT_SLEEP':
+        setActiveAgents(prev => { const n = { ...prev }; delete n[msg.agent]; return n })
+        setAgentLog(prev => [{ agent: msg.agent, action: 'sleep', task: '', ts: new Date().toLocaleTimeString('en-GB', { hour12: false }) }, ...prev].slice(0, 40))
+        break
+      case 'PIPELINE_UPDATE':
+        setPipelineLog(prev => [{ agent: msg.agent, message: msg.message, ts: new Date().toLocaleTimeString('en-GB',{hour12:false}) }, ...prev].slice(0, 30))
+        addFeed('info', msg.agent, msg.message)
+        break
       default: break
     }
   }, [addFeed])
@@ -183,7 +207,8 @@ export default function App() {
         <div className="main-grid">
           {/* LEFT — full height */}
           <div className="grid-left">
-            <LeftPanel agent={snap.agent} mode={snap.mode} signals={snap.anomaly_signals} score={snap.anomaly_score} incident={snap.active_incident} />
+            <LeftPanel agent={snap.agent} mode={snap.mode} signals={snap.anomaly_signals} score={snap.anomaly_score} incident={snap.active_incident}
+              agentStates={agentStates} activeAgents={activeAgents} agentLog={agentLog} pipelineLog={pipelineLog} />
           </div>
 
           {/* TOP CENTER — Zone Observatory */}

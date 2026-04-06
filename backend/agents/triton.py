@@ -1,31 +1,31 @@
 """
 TRITON — Execution Agent (Zone 1 / Trench)
 
-Executes only explicitly approved, time-boxed actions within strict scope boundaries.
-Never self-authorizes. Acts solely under instructions from TARE after:
-  - Supervisor approval
-  - RISKADOR risk score accepted
-  - AEGIS safety preconditions cleared
-  - TEMPEST session monitor armed
+Executes only explicitly approved, time-boxed actions within strict scope.
+Never self-authorizes. Every execution step must pass AEGIS validation first.
 
-Wake pattern: activated ONLY when TARE issues an explicit execution permit
-with a defined scope and time boundary. Sleeps otherwise.
-Any attempt to wake TRITON without a valid TARE permit is blocked.
+Flow per step:
+  TARE issues permit → AEGIS validates → TRITON executes → TEMPEST records
 
-Phase 2 scope — stub implemented, full execution engine pending.
+If AEGIS vetoes a step, TRITON stops immediately.
+If TEMPEST detects a tempo violation, the freeze_fn fires and TRITON stops.
+TRITON calls execute_fn (tare_engine.process_command) for real grid effect.
 """
+from datetime import datetime
 
 
 class TRITON:
     NAME = "TRITON"
     ZONE = "Zone 1 — Trench"
     ROLE = "Execution Agent"
-    DESCRIPTION = "Executes approved, time-boxed actions only. Never self-authorizes."
+    DESCRIPTION = "Executes TARE-approved, time-boxed steps only. Stopped immediately by AEGIS veto."
 
     def __init__(self):
         self._active         = False
-        self._permit         = None    # execution permit issued by TARE
-        self._last_execution = None
+        self._permit         = None
+        self._execute_fn     = None   # callback: process_command(cmd, asset, zone)
+        self._execution_log  = []
+        self._stopped        = False
 
     @property
     def active(self) -> bool:
@@ -35,51 +35,93 @@ class TRITON:
     def has_permit(self) -> bool:
         return self._permit is not None
 
-    def issue_permit(self, permit: dict) -> None:
+    def arm(self, execute_fn, permit: dict) -> None:
         """
-        TARE issues a time-boxed execution permit to TRITON.
-        permit must contain: scope, allowed_commands, expires_at, approved_by
+        TARE arms TRITON with an execute callback and a time-boxed permit.
+        execute_fn: tare_engine.process_command(command, asset_id, zone)
+        permit: {scope, allowed_commands, issued_at, issued_by}
         """
-        self._permit = permit
+        self._execute_fn    = execute_fn
+        self._permit        = permit
+        self._execution_log = []
+        self._stopped       = False
 
-    def revoke_permit(self) -> None:
-        """TARE or TEMPEST revokes the permit immediately."""
-        self._permit = None
+    def revoke(self) -> None:
+        """TARE or TEMPEST revokes the permit — TRITON stops immediately."""
+        self._permit  = None
+        self._stopped = True
+        self._active  = False
 
-    def execute(self, command: str, asset_id: str, zone: str) -> dict:
+    def execute_step(self, command: str, asset_id: str, zone: str) -> dict:
         """
-        Execute a single approved command within the active permit scope.
-        Blocked if no valid permit exists.
-        Full implementation: Phase 2 (real SCADA command dispatch).
+        Execute one approved step via the engine callback.
+        Returns the execution result.
+        Blocked if: no permit, stopped flag set, or command not in allowed list.
         """
-        if not self._permit:
+        if self._stopped or not self._permit:
             return {
-                "status":  "BLOCKED",
-                "reason":  "No execution permit issued by TARE",
-                "command": command,
+                "status":   "BLOCKED",
+                "reason":   "No active permit or TRITON was stopped",
+                "command":  command,
+                "asset_id": asset_id,
+                "zone":     zone,
+            }
+
+        allowed = self._permit.get("allowed_commands", [])
+        if allowed and command not in allowed:
+            return {
+                "status":   "BLOCKED",
+                "reason":   f"{command} not in permit scope {allowed}",
+                "command":  command,
+                "asset_id": asset_id,
+                "zone":     zone,
             }
 
         self._active = True
-        result = {
-            "command":      command,
-            "asset_id":     asset_id,
-            "zone":         zone,
-            "status":       "STUB — Phase 2",
-            "permit":       self._permit,
-            "executed_by":  self.NAME,
-        }
-        self._last_execution = result
-        self._active = False
-        return result
+        try:
+            result = self._execute_fn(command, asset_id, zone)
+            entry = {
+                "command":     command,
+                "asset_id":    asset_id,
+                "zone":        zone,
+                "decision":    result.get("decision"),
+                "reason":      result.get("reason"),
+                "status":      "EXECUTED",
+                "executed_by": self.NAME,
+                "timestamp":   datetime.now().isoformat(),
+            }
+        except Exception as e:
+            entry = {
+                "command":     command,
+                "asset_id":    asset_id,
+                "zone":        zone,
+                "status":      "ERROR",
+                "error":       str(e),
+                "executed_by": self.NAME,
+                "timestamp":   datetime.now().isoformat(),
+            }
+        finally:
+            self._active = False
+
+        self._execution_log.append(entry)
+        return entry
+
+    def reset(self):
+        self._active        = False
+        self._permit        = None
+        self._execute_fn    = None
+        self._execution_log = []
+        self._stopped       = False
 
     def status(self) -> dict:
         return {
-            "name":           self.NAME,
-            "zone":           self.ZONE,
-            "role":           self.ROLE,
-            "description":    self.DESCRIPTION,
-            "active":         self._active,
-            "phase":          "Phase 2 — Stub",
-            "has_permit":     self.has_permit,
-            "last_execution": self._last_execution,
+            "name":          self.NAME,
+            "zone":          self.ZONE,
+            "role":          self.ROLE,
+            "description":   self.DESCRIPTION,
+            "active":        self._active,
+            "has_permit":    self.has_permit,
+            "stopped":       self._stopped,
+            "steps_executed":len(self._execution_log),
+            "execution_log": self._execution_log[-5:],
         }
