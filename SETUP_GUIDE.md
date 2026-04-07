@@ -54,7 +54,7 @@ All six scenario buttons require a free Groq API key.
 ## Step 2 — Install Backend Dependencies (First Time Only)
 
 ```
-cd C:\Users\YourName\Desktop\Aegis\aegis-poc\backend
+cd aegis-poc\backend
 pip install -r requirements.txt
 ```
 
@@ -77,7 +77,7 @@ GROQ_API_KEY=your_actual_key_here
 ## Step 4 — Train the ML Model (First Time Only)
 
 ```
-cd C:\Users\YourName\Desktop\Aegis\aegis-poc\ml
+cd aegis-poc\ml
 python generate_grid_data.py
 python train_model.py
 ```
@@ -88,16 +88,26 @@ Creates `ml/model.pkl`. Only needed once.
 
 ## Step 5 — Start the Server
 
+From the `aegis-poc` folder:
+
 ```
-cd C:\Users\YourName\Desktop\Aegis\aegis-poc\backend
-python -m uvicorn main:app --port 8002 --host 0.0.0.0
+cd aegis-poc
+python run.py
 ```
 
 Expected output:
 ```
-INFO: Uvicorn running on http://0.0.0.0:8002
-INFO: Application startup complete.
+═══════════════════════════════════════════
+  TARE - Trusted Access Response Engine
+═══════════════════════════════════════════
+
+  Starting server on port 8050...
+  Browser will open at:  http://localhost:8050
+
+  Press Ctrl+C to stop.
 ```
+
+The server auto-finds a free port between 8050–8100 and opens your browser automatically.
 
 Leave this window open throughout the demo.
 
@@ -105,8 +115,9 @@ Leave this window open throughout the demo.
 
 ## Step 6 — Open the App
 
+The browser opens automatically. If it doesn't:
 ```
-http://localhost:8002
+http://localhost:8050
 ```
 
 The **animated landing page** loads first.
@@ -116,13 +127,13 @@ The **animated landing page** loads first.
 ## Step 7 — Landing Page
 
 The landing page displays:
-- **Maturity Journey** — Manual → Automated → Autonomous (enlarged cards, projection-ready)
+- **Maturity Journey** — Manual → Automated → Autonomous
 - **What TARE Monitors** — 6 parameters in plain English
-- **▶ Play Narration** — starts automated voice walkthrough (browser Text-to-Speech, no install needed)
+- **▶ Play Narration** — starts voice walkthrough on demand (browser Text-to-Speech, no install needed)
 - **Launch Demo →** — fades into the main dashboard
 
 **Narrated presentation flow:**
-1. Click **▶ Play Narration** — voice starts automatically
+1. Click **▶ Play Narration** to start the voice walkthrough
 2. Click **Launch Demo →** when ready — narration continues seamlessly on dashboard
 3. Use the **narration controls** in the Live Event Monitor (right panel) to pause/mute/resume at any time
 
@@ -150,6 +161,9 @@ All six scenarios are in the **▶ Scenarios** dropdown on the right panel.
 ---
 
 ## What You Will See
+
+### Agent Voices
+Each of the 12 agents + BARRIER speaks aloud during scenarios using the browser's built-in Text-to-Speech. Every agent has a distinct voice (pitch, rate, accent) so you can tell them apart. Use the **🔊 On / 🔇 Muted** button in the left panel Agents tab to toggle agent voices independently of narration.
 
 ### Narration Controls (Live Event Monitor — right panel)
 - **▶ Start / ⏸ Pause** — play or pause narration
@@ -227,18 +241,18 @@ Appear in the Ask TARE tab when TARE fires:
 
 ## Port Conflict (Windows)
 
-If you see `ERROR: [Errno 10048]`:
+`run.py` automatically finds a free port between 8050–8100. If all ports in that range are taken:
 ```
-python -m uvicorn main:app --port 8003 --host 0.0.0.0
+cd aegis-poc\backend
+python -m uvicorn main:app --port 8200 --host 0.0.0.0
 ```
-Increment (8002 → 8003 → 8004) until it starts. WebSocket URL updates automatically.
 
 ---
 
 ## Rebuilding the Frontend (Only If You Edit Source)
 
 ```
-cd C:\Users\YourName\Desktop\Aegis\aegis-poc\frontend
+cd aegis-poc\frontend
 npm install        (first time only)
 npm run build
 cp -r dist/. ../backend/static/
@@ -250,13 +264,14 @@ cp -r dist/. ../backend/static/
 
 | Problem | Fix |
 |---|---|
-| **● OFFLINE in header** | Backend not running. Start uvicorn again. |
-| **Blank page** | Must be `http://localhost:8002` not port 5173. |
-| **Port already in use** | Increment port number. |
+| **● OFFLINE in header** | Backend not running. Run `python run.py` again. |
+| **Blank page** | Check the port printed in the terminal (e.g. `http://localhost:8050`). |
+| **Port already in use** | `run.py` auto-selects next free port — check terminal output for actual URL. |
 | **Scenarios do nothing** | Groq key missing. Check `backend/.env`. |
 | **Agent halted: 401** | Groq key invalid. Get a new one at console.groq.com. |
 | **Agent halted: 429** | Groq rate limit. Wait 30 seconds. |
-| **No voice narration** | Browser needs a user gesture first — click anywhere on page, then Play Narration. |
+| **No voice narration** | Click anywhere on page first (browser requires a user gesture), then click ▶ Play Narration. |
+| **Agents not speaking** | Check 🔊 On button in left panel Agents tab — may be muted. |
 | **pip install fails** | Add `--trusted-host pypi.org` flag. |
 
 ---
@@ -275,10 +290,9 @@ Create .env → GROQ_API_KEY=your_key
 
 EVERY TIME YOU DEMO
 ────────────────────
-cd aegis-poc\backend
-python -m uvicorn main:app --port 8002 --host 0.0.0.0
-Open: http://localhost:8002
-Landing page → Play Narration (optional) → Launch Demo →
+cd aegis-poc
+python run.py
+Browser opens automatically → Landing page → Launch Demo →
 Confirm ● LIVE in header
 
 DEMO ORDER
@@ -289,14 +303,10 @@ DEMO ORDER
 ↺ Reset → 🔺 SCOPE CREEP  → Approve  (pivot + containment)
 ↺ Reset → 🕳 SILENT RECON → Deny     (ML only)
 ↺ Reset → 💥 SWARM STRIKE → Deny     (coordinated)
-
-PORT CONFLICT?
-──────────────
---port 8003, 8004... → http://localhost:8003
 ```
 
 ---
 
 *TARE AEGIS-ID — Setup & Run Guide*
 *Energy & Utilities Security Platform — Internal Use Only*
-*Version: POC v3.5 — March 2026*
+*Version: POC v3.6 — April 2026*
