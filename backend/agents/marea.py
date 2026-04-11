@@ -1,5 +1,7 @@
 """
 MAREA — Drift Analyst (Zone 3 / Reef)
+BlueVerse agent enhances signal explanations when available.
+Python rules + ML always run first — BlueVerse only enriches text.
 
 Analyzes telemetry over time to detect behavioral drift:
   R1 — BURST_RATE         : command frequency spike
@@ -11,7 +13,15 @@ Analyzes telemetry over time to detect behavioral drift:
 Focuses on trends and deviations, not single events.
 Wakes when KORAL delivers new telemetry. Sleeps immediately after returning.
 """
+import os
 import time
+
+try:
+    from blueverse_client import get_client as _get_bv_client
+    _BV_OK = bool(os.environ.get("BLUEVERSE_CLIENT_ID", ""))
+except Exception:
+    _get_bv_client = None
+    _BV_OK = False
 
 HIGH_IMPACT      = {"OPEN_BREAKER", "CLOSE_BREAKER", "RESTART_CONTROLLER", "EMERGENCY_SHUTDOWN"}
 NEEDS_SIMULATION = {"OPEN_BREAKER"}
@@ -109,6 +119,22 @@ class MAREA:
             for sig in ml_result.get("signals", []):
                 sig["detected_by"] = self.NAME
                 signals.append(sig)
+
+        # Enhance signal details with BlueVerse if available
+        if signals and _BV_OK and _get_bv_client:
+            try:
+                sig_names = ", ".join(s["signal"] for s in signals)
+                message = (
+                    f"MAREA detected {len(signals)} signal(s): {sig_names}. "
+                    f"Command: {command}, Zone: {zone}, Agent assigned zone: {agent.get('assigned_zone','?')}. "
+                    f"In 1-2 sentences explain why these signals indicate a threat."
+                )
+                bv_detail = _get_bv_client().invoke_safe("MAREA", message, fallback="")
+                if bv_detail:
+                    for s in signals:
+                        s["bv_analysis"] = bv_detail
+            except Exception:
+                pass
 
         self._active = False
         return signals

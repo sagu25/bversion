@@ -11,7 +11,15 @@ If AEGIS vetoes a step, TRITON stops immediately.
 If TEMPEST detects a tempo violation, the freeze_fn fires and TRITON stops.
 TRITON calls execute_fn (tare_engine.process_command) for real grid effect.
 """
+import os
 from datetime import datetime
+
+try:
+    from blueverse_client import get_client as _get_bv_client
+    _BV_OK = bool(os.environ.get("BLUEVERSE_CLIENT_ID", ""))
+except Exception:
+    _get_bv_client = None
+    _BV_OK = False
 
 
 class TRITON:
@@ -102,6 +110,20 @@ class TRITON:
             }
         finally:
             self._active = False
+
+        # Enhance execution status with BlueVerse
+        if _BV_OK and _get_bv_client:
+            try:
+                message = (
+                    f"TRITON executed {command} on {asset_id} in {zone}. "
+                    f"Status: {entry.get('status')}. Decision: {entry.get('decision','?')}. "
+                    f"In 1 sentence, report this execution result."
+                )
+                bv_report = _get_bv_client().invoke_safe("TRITON", message, fallback="")
+                if bv_report:
+                    entry["bv_report"] = bv_report
+            except Exception:
+                pass
 
         self._execution_log.append(entry)
         return entry

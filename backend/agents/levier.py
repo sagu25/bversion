@@ -8,7 +8,15 @@ Never initiates new actions — only stabilises and recovers.
 Rollback steps are produced by NAVIS (e.g., CLOSE_BREAKER if OPEN_BREAKER ran).
 LEVIER executes them via the same engine callback TRITON uses.
 """
+import os
 from datetime import datetime
+
+try:
+    from blueverse_client import get_client as _get_bv_client
+    _BV_OK = bool(os.environ.get("BLUEVERSE_CLIENT_ID", ""))
+except Exception:
+    _get_bv_client = None
+    _BV_OK = False
 
 
 class LEVIER:
@@ -86,6 +94,21 @@ class LEVIER:
             "recovered_by":   self.NAME,
             "timestamp":      datetime.now().isoformat(),
         }
+        # Enhance recovery report with BlueVerse
+        if _BV_OK and _get_bv_client:
+            try:
+                message = (
+                    f"LEVIER rollback complete. Steps planned: {recovery['steps_planned']}, "
+                    f"executed: {recovery['steps_executed']}, status: {recovery['status']}. "
+                    f"Errors: {recovery['errors'] or 'none'}. "
+                    f"In 1-2 sentences, report the rollback outcome to the supervisor."
+                )
+                bv_report = _get_bv_client().invoke_safe("LEVIER", message, fallback="")
+                if bv_report:
+                    recovery["bv_report"] = bv_report
+            except Exception:
+                pass
+
         self._last_recovery = recovery
         self._active        = False
         return recovery

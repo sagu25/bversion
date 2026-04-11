@@ -13,8 +13,16 @@ Violations that trigger a freeze:
 TEMPEST is the last line of defence. Even an approved, time-boxed session
 can be frozen if execution pace becomes abnormal.
 """
+import os
 import time
 from datetime import datetime
+
+try:
+    from blueverse_client import get_client as _get_bv_client
+    _BV_OK = bool(os.environ.get("BLUEVERSE_CLIENT_ID", ""))
+except Exception:
+    _get_bv_client = None
+    _BV_OK = False
 
 
 MIN_INTER_STEP_SECONDS = 1.0
@@ -116,6 +124,21 @@ class TEMPEST:
         if violations and self._freeze_fn:
             assessment["freeze_issued"] = True
             self._freeze_fn(f"TEMPEST freeze — {'; '.join(violations)}")
+
+        # Enhance tempo assessment with BlueVerse
+        if _BV_OK and _get_bv_client:
+            try:
+                status = "OK" if tempo_ok else f"VIOLATED — {'; '.join(violations)}"
+                message = (
+                    f"TEMPEST tempo check step {step_num}: {command} on {asset_id}. "
+                    f"Tempo status: {status}. "
+                    f"In 1 sentence, report this tempo monitoring result."
+                )
+                bv_msg = _get_bv_client().invoke_safe("TEMPEST", message, fallback="")
+                if bv_msg:
+                    assessment["bv_message"] = bv_msg
+            except Exception:
+                pass
 
         self._step_log.append(assessment)
         return assessment

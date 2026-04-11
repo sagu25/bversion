@@ -15,8 +15,16 @@ Safety checks performed:
 AEGIS wakes before every TRITON step. If it vetoes, TRITON stops immediately
 and LEVIER handles rollback.
 """
+import os
 import time
 from datetime import datetime
+
+try:
+    from blueverse_client import get_client as _get_bv_client
+    _BV_OK = bool(os.environ.get("BLUEVERSE_CLIENT_ID", ""))
+except Exception:
+    _get_bv_client = None
+    _BV_OK = False
 
 
 class AEGIS:
@@ -125,6 +133,21 @@ class AEGIS:
             "validated_by": self.NAME,
             "timestamp":    datetime.now().isoformat(),
         }
+        # Enhance validation message with BlueVerse
+        if _BV_OK and _get_bv_client:
+            try:
+                status = "VALIDATED" if passed else f"VETOED — {veto_reason}"
+                message = (
+                    f"AEGIS safety check for {command} on {asset_id} in {zone}: {status}. "
+                    f"Checks: {[c['check'] for c in checks]}. "
+                    f"In 1 sentence, explain this safety decision."
+                )
+                bv_msg = _get_bv_client().invoke_safe("AEGIS", message, fallback="")
+                if bv_msg:
+                    result["bv_message"] = bv_msg
+            except Exception:
+                pass
+
         self._last_check = result
         self._active     = False
         return result
