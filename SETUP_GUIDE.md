@@ -307,6 +307,77 @@ DEMO ORDER
 
 ---
 
+## BlueVerse MCP Integration (Optional)
+
+Exposes all 13 TARE agents as tools in BlueVerse Foundry via MCP Remote - HTTP.
+
+### Prerequisites
+- ngrok installed (download single `.exe` from ngrok.com — no install needed)
+- Free ngrok account + authtoken configured
+- BlueVerse Foundry access (Creator role)
+
+### Step 1 — Start the AEGIS server
+```
+cd aegis-poc\backend
+python -m uvicorn main:app --port 8052 --host 0.0.0.0
+```
+
+### Step 2 — Start ngrok
+```
+ngrok.exe http 8052
+```
+Copy the forwarding URL e.g. `https://xxxx.ngrok-free.dev`
+
+### Step 3 — Register in BlueVerse
+```
+Agents → Tools & MCP Server Hub → Register MCP Server
+
+Name         : AEGIS_TARE
+Description  : TARE multi-agent identity security system for energy grid
+Server Type  : MCP Remote - HTTP
+URL          : https://xxxx.ngrok-free.dev/mcp
+Headers      : (leave empty)
+Base Unit    : your unit
+```
+
+### Step 4 — Create a BlueVerse Agent
+```
+Agents → Agent Hub → Create Agent
+→ Add AEGIS_TARE MCP server as tool source
+```
+
+BlueVerse auto-discovers all 16 tools:
+
+| Tool | Agent(s) | What it does |
+|---|---|---|
+| `tare_evaluate_command` | KORAL→MAREA→TASYA→NEREUS→BARRIER | Full pipeline eval |
+| `tare_get_status` | TARE | System mode, stats, zones |
+| `tare_get_audit_log` | TARE | Gateway command history |
+| `barrier_get_policy` | BARRIER | Current enforcement mode |
+| `koral_get_session` | KORAL | Raw telemetry session log |
+| `marea_get_signals` | MAREA | All drift signals detected |
+| `nereus_get_recommendation` | NEREUS | Latest freeze recommendation |
+| `echo_diagnose` | ECHO | Zone/asset diagnostics |
+| `simar_simulate` | SIMAR | What-if simulation |
+| `navis_build_plan` | NAVIS | NERC CIP execution plan |
+| `riskador_score_plan` | RISKADOR | Risk score (0–100) |
+| `triton_get_status` | TRITON | Execution status |
+| `tare_get_all_agents_status` | All 13 | Live status of every agent |
+| `tare_approve_timebox` | TARE+BARRIER | Approve 3-min window |
+| `tare_deny_timebox` | TARE+BARRIER | Deny, keep FREEZE |
+| `tare_reset` | TARE | Reset full session |
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| **502 Bad Gateway in ngrok** | AEGIS server not running. Run Step 1 again. |
+| **405 Method Not Allowed** | Old code without MCP. Pull latest from repo. |
+| **Error in BlueVerse on register** | Server not reachable. Check ngrok URL matches server port. |
+| **ngrok URL changed** | Re-register in BlueVerse with new URL each ngrok restart. |
+
+---
+
 *TARE AEGIS-ID — Setup & Run Guide*
 *Energy & Utilities Security Platform — Internal Use Only*
-*Version: POC v3.6 — April 2026*
+*Version: POC v3.7 — April 2026*
