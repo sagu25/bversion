@@ -247,6 +247,70 @@ TOOLS = [
         ),
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
+
+    # ── Scenario: Read-Only Write Attempt ─────────────────────────────────────
+
+    {
+        "name": "log_identity_action",
+        "description": (
+            "KORAL logs an identity action attempt — records who (principal) attempted "
+            "what action and in which zone. Classifies the action as READ, WRITE, or CONTROL. "
+            "Call this before check_identity_policy to build the telemetry trail."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "principal":   {"type": "string",
+                                "description": "Identity attempting the action e.g. KORAL_AGENT, MONITORING_USER"},
+                "action":      {"type": "string",
+                                "description": "Action attempted e.g. OPEN_BREAKER, GET_STATUS, CONFIG_CHANGE"},
+                "target_zone": {"type": "string",
+                                "description": "Zone where the action was attempted: Z1, Z2, or Z3"},
+            },
+            "required": ["principal", "action", "target_zone"],
+        },
+    },
+
+    {
+        "name": "check_identity_policy",
+        "description": (
+            "TARE checks if the principal's registered role permits the attempted action. "
+            "If a read-only identity attempts a write/control operation: "
+            "KORAL logs it → BARRIER applies READ_ONLY_DOWNGRADE → ServiceNow ticket created. "
+            "Returns decision (ALLOW/DENY), violation flag, enforcement details, and incident ID."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "principal":   {"type": "string",
+                                "description": "Identity to check e.g. KORAL_AGENT, MONITORING_USER, GRID_OPERATOR"},
+                "action":      {"type": "string",
+                                "description": "Action the identity is attempting e.g. OPEN_BREAKER, RESTART_CONTROLLER"},
+                "target_zone": {"type": "string",
+                                "description": "Zone where the action is being attempted: Z1, Z2, or Z3"},
+            },
+            "required": ["principal", "action", "target_zone"],
+        },
+    },
+
+    {
+        "name": "enforce_readonly_policy",
+        "description": (
+            "BARRIER directly enforces a READ_ONLY_DOWNGRADE on a principal. "
+            "Blocks all write/control actions from that identity going forward. "
+            "Use after check_identity_policy confirms a violation, or to manually lock down an identity."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "principal": {"type": "string",
+                              "description": "Principal to block e.g. KORAL_AGENT"},
+                "action":    {"type": "string",
+                              "description": "The write/control action that triggered enforcement"},
+            },
+            "required": ["principal", "action"],
+        },
+    },
 ]
 
 
@@ -507,6 +571,41 @@ def _execute_tool(name: str, arguments: dict, engine) -> dict:
     elif name == "tare_reset":
         engine.reset()
         return {"status": "reset", "message": "TARE session reset. All zones nominal. Mode → NORMAL."}
+
+    # ── log_identity_action ───────────────────────────────────────────────────
+    elif name == "log_identity_action":
+        principal   = arguments.get("principal", "")
+        action      = arguments.get("action", "")
+        target_zone = arguments.get("target_zone", "")
+        if not principal or not action or not target_zone:
+            return {"error": "principal, action, and target_zone are required"}
+        record = engine.koral.log_action(principal, action, target_zone)
+        return {
+            "logged":      True,
+            "record":      record,
+            "identity_log_total": len(engine.koral.get_identity_log()),
+        }
+
+    # ── check_identity_policy ─────────────────────────────────────────────────
+    elif name == "check_identity_policy":
+        principal   = arguments.get("principal", "")
+        action      = arguments.get("action", "")
+        target_zone = arguments.get("target_zone", "")
+        if not principal or not action or not target_zone:
+            return {"error": "principal, action, and target_zone are required"}
+        return engine.check_identity_policy(principal, action, target_zone)
+
+    # ── enforce_readonly_policy ───────────────────────────────────────────────
+    elif name == "enforce_readonly_policy":
+        principal = arguments.get("principal", "")
+        action    = arguments.get("action", "")
+        if not principal or not action:
+            return {"error": "principal and action are required"}
+        result = engine.barrier.enforce_readonly(principal, action)
+        return {
+            **result,
+            "blocked_identities": list(engine.barrier._blocked_identities),
+        }
 
     return {"error": f"Unknown tool: {name}"}
 

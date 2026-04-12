@@ -7,8 +7,12 @@ TARE decides what mode to set. BARRIER enforces it — no interpretation, no jud
 TARE instructs: barrier.set_mode("FREEZE")
 Gateway calls:  barrier.enforce(command, zone) → (ALLOW/DENY, reason, policy_id)
 
+Identity enforcement:
+  barrier.enforce_readonly(principal, action) → blocks read-only identity that attempted write
+
 Never analyzes behavior. Never creates incidents. Only enforces the mode it is given.
 """
+from datetime import datetime
 
 READ_ONLY   = {"GET_STATUS"}
 DIAG_CMDS   = {"SIMULATE_SWITCH"}
@@ -22,8 +26,10 @@ class BARRIER:
     DESCRIPTION = "Enforces TARE's mode decisions at the command gateway. The sole ALLOW/DENY authority."
 
     def __init__(self):
-        self._mode   = "NORMAL"
-        self._active = False
+        self._mode               = "NORMAL"
+        self._active             = False
+        self._blocked_identities = set()    # principals blocked due to role violation
+        self._enforcement_log    = []       # identity enforcement history
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -53,8 +59,39 @@ class BARRIER:
         self._active = False
         return result
 
+    def enforce_readonly(self, principal: str, action: str) -> dict:
+        """
+        Block a read-only identity that attempted a write/control action.
+        Adds the principal to the blocked set and logs the enforcement.
+        """
+        self._active = True
+        self._blocked_identities.add(principal)
+        result = {
+            "principal":   principal,
+            "action":      action,
+            "decision":    "DENY",
+            "enforcement": "READ_ONLY_DOWNGRADE",
+            "reason":      (f"Identity '{principal}' is read-only. "
+                            f"Write/control operation '{action}' is not permitted."),
+            "policy_id":   "POL-IDENTITY-001",
+            "timestamp":   datetime.now().isoformat(),
+        }
+        self._enforcement_log.append(result)
+        self._active = False
+        return result
+
+    def is_blocked(self, principal: str) -> bool:
+        """Return True if the principal has been blocked due to a role violation."""
+        return principal in self._blocked_identities
+
+    def get_enforcement_log(self, n: int = 20) -> list:
+        """Return last N identity enforcement log entries."""
+        return self._enforcement_log[-n:]
+
     def reset(self) -> None:
-        self._mode   = "NORMAL"
+        self._mode               = "NORMAL"
+        self._blocked_identities = set()
+        self._enforcement_log    = []
 
     # ── Enforcement Logic ──────────────────────────────────────────────────────
 
@@ -114,10 +151,12 @@ class BARRIER:
 
     def status(self) -> dict:
         return {
-            "name":        self.NAME,
-            "zone":        self.ZONE,
-            "role":        self.ROLE,
-            "description": self.DESCRIPTION,
-            "active":      self._active,
-            "mode":        self._mode,
+            "name":               self.NAME,
+            "zone":               self.ZONE,
+            "role":               self.ROLE,
+            "description":        self.DESCRIPTION,
+            "active":             self._active,
+            "mode":               self._mode,
+            "blocked_identities": list(self._blocked_identities),
+            "enforcement_count":  len(self._enforcement_log),
         }

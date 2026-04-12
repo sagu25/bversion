@@ -17,7 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from tare_engine import TAREEngine
 from grid_agent import (run_normal_agent, run_rogue_agent, run_impersonator_agent,
-                        run_coordinated_agent, run_escalation_agent, run_slow_low_agent)
+                        run_coordinated_agent, run_escalation_agent, run_slow_low_agent,
+                        run_readonly_write_agent)
 from mcp_server import router as mcp_router
 
 import os
@@ -141,6 +142,12 @@ async def agent_slowlow():
     """Slow & low recon — rules silent, ML model flags it."""
     run_slow_low_agent(engine, manager.sync_broadcast)
     return {"status": "agent_started", "task": "slowlow"}
+
+@app.post("/agent/readonly-write")
+async def agent_readonly_write():
+    """Read-only identity attempts a write operation — KORAL logs, TARE checks policy, BARRIER enforces."""
+    run_readonly_write_agent(engine, manager.sync_broadcast)
+    return {"status": "agent_started", "task": "readonly_write"}
 
 @app.post("/approve/timebox")
 async def approve_timebox():

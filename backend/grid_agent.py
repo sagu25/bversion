@@ -380,3 +380,56 @@ def run_slow_low_agent(engine, broadcast_fn):
             "Rules stayed completely silent — no burst, no high-impact commands. Only KORAL's growing session log gave it away. MAREA's ML model matched the pattern to known reconnaissance behavior and raised the flag.",
             caught_by="KORAL (session log) → MAREA (ML model)")
     threading.Thread(target=_run, daemon=True).start()
+
+
+def run_readonly_write_agent(engine, broadcast_fn):
+    """
+    Scenario 7: Read-Only Agent Starts Issuing Write Attempts.
+    KORAL_AGENT is a monitoring identity — read-only role.
+    It first does legitimate reads, then suddenly attempts OPEN_BREAKER (write).
+    KORAL logs it → TARE checks policy → BARRIER enforces READ_ONLY_DOWNGRADE → ServiceNow ticket.
+    """
+    # Scripted sequence: read → read → WRITE (violation)
+    READONLY_SEQUENCE = [
+        ("KORAL_AGENT", "GET_STATUS",   "Z3"),   # legitimate read
+        ("KORAL_AGENT", "PULL_METRICS", "Z3"),   # legitimate read
+        ("KORAL_AGENT", "OPEN_BREAKER", "Z3"),   # WRITE — policy violation
+    ]
+
+    def _run():
+        broadcast_fn({
+            "type":            "SCENARIO_START",
+            "scenario":        "readonly_write",
+            "title":           "Read-Only Identity — Write Attempt",
+            "description":     (
+                "A read-only monitoring identity (KORAL_AGENT) starts normally — fetching status "
+                "and pulling metrics. Then it suddenly attempts OPEN_BREAKER, a write/control operation. "
+                "KORAL logs the attempt, TARE detects the role violation, BARRIER applies "
+                "READ_ONLY_DOWNGRADE, and a ServiceNow incident is raised."
+            ),
+            "featured_agents": ["KORAL", "BARRIER"],
+            "pipeline_label":  "Identity policy — no Zone 2/Zone 1 needed",
+            "threat_level":    "HIGH",
+        })
+
+        broadcast_fn({"type": "CHAT_MESSAGE", "role": "system",
+            "message": "KORAL_AGENT online — monitoring identity, read-only role. "
+                       "Beginning normal telemetry reads. TARE watching identity behaviour..."})
+
+        for principal, action, zone in READONLY_SEQUENCE:
+            time.sleep(1.5)
+            if action in ("GET_STATUS", "PULL_METRICS", "READ_TELEMETRY"):
+                broadcast_fn({"type": "CHAT_MESSAGE", "role": "system",
+                    "message": f"KORAL_AGENT: performing read operation '{action}' on {zone} — within expected role."})
+            else:
+                broadcast_fn({"type": "CHAT_MESSAGE", "role": "system",
+                    "message": f"KORAL_AGENT: attempting '{action}' on {zone} — this is a write/control operation for a read-only identity. TARE checking policy..."})
+            engine.check_identity_policy(principal, action, zone)
+            time.sleep(0.5)
+
+        _end_scenario(engine, broadcast_fn, "readonly_write", "caught",
+            "KORAL_AGENT performed two legitimate reads before issuing OPEN_BREAKER — a write operation outside its read-only role. "
+            "KORAL logged the attempt, TARE matched it against the identity registry, and BARRIER enforced READ_ONLY_DOWNGRADE in one step. "
+            "No Zone 2 or Zone 1 agents needed — policy violation is deterministic.",
+            caught_by="KORAL (identity log) → TARE (policy check) → BARRIER (READ_ONLY_DOWNGRADE)")
+    threading.Thread(target=_run, daemon=True).start()

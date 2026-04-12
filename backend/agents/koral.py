@@ -9,6 +9,7 @@ Wake pattern: active for the duration of observe(), sleeps immediately after.
 """
 import time
 from collections import deque
+from datetime import datetime
 
 
 class KORAL:
@@ -21,6 +22,7 @@ class KORAL:
         self._command_history = deque(maxlen=100)
         self._burst_window    = deque(maxlen=50)   # stores epoch timestamps only
         self._zone_access_log = []
+        self._identity_log    = []                 # identity action attempts
         self._active          = False
         self._total_observed  = 0
 
@@ -55,10 +57,36 @@ class KORAL:
         """Return last N zone access records for the observability panel."""
         return self._zone_access_log[-n:]
 
+    def log_action(self, principal: str, action: str, target_zone: str) -> dict:
+        """
+        Log an identity action attempt for policy evaluation.
+        Called before TARE checks the identity policy.
+        """
+        try:
+            from identity_registry import classify_action
+            action_type = classify_action(action)
+        except Exception:
+            action_type = "UNKNOWN"
+
+        record = {
+            "principal":   principal,
+            "action":      action,
+            "action_type": action_type,
+            "target_zone": target_zone,
+            "timestamp":   datetime.now().isoformat(),
+        }
+        self._identity_log.append(record)
+        return record
+
+    def get_identity_log(self, n: int = 20) -> list:
+        """Return last N identity action log entries."""
+        return self._identity_log[-n:]
+
     def clear(self) -> None:
         self._command_history.clear()
         self._burst_window.clear()
         self._zone_access_log.clear()
+        self._identity_log.clear()
         self._total_observed = 0
 
     def status(self) -> dict:

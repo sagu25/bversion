@@ -388,6 +388,126 @@ class TAREEngine:
         })
         self._broadcast(self._snapshot())
 
+    # ── Identity Policy Check (Scenario: Read-Only Write Attempt) ────────────
+
+    def check_identity_policy(self, principal: str, action: str, target_zone: str) -> dict:
+        """
+        Check if an identity's role permits the attempted action.
+        Flow:
+          KORAL logs the attempt → TARE evaluates policy →
+          If violation: BARRIER enforces READ_ONLY_DOWNGRADE + ServiceNow ticket
+        """
+        from identity_registry import get_identity, is_action_allowed, classify_action, is_write_or_control
+
+        identity    = get_identity(principal)
+        action_type = classify_action(action)
+
+        # Step 1: KORAL logs the action attempt
+        self._broadcast_agent_wake("KORAL", f"Logging identity action: {principal} → {action}")
+        self.koral.log_action(principal, action, target_zone)
+        self._broadcast_agent_sleep("KORAL")
+        self._voice("KORAL", f"Logged. {principal} attempted {action_type} action '{action}' on {target_zone}. Passing to TARE for policy check.")
+
+        if not identity:
+            self._broadcast({"type": "CHAT_MESSAGE", "role": "tare",
+                "message": f"Unknown principal '{principal}' attempted '{action}' — no registered identity found. Denied."})
+            return {"principal": principal, "action": action, "decision": "DENY",
+                    "reason": f"Unknown principal: {principal}", "violation": True}
+
+        allowed = is_action_allowed(principal, action)
+
+        # Step 2: TARE evaluates policy
+        if not allowed and is_write_or_control(action):
+            role = identity.get("role", "UNKNOWN")
+
+            # Step 3: BARRIER enforces
+            self._broadcast_agent_wake("BARRIER", f"Enforcing READ_ONLY_DOWNGRADE on {principal}")
+            enforcement = self.barrier.enforce_readonly(principal, action)
+            self._broadcast_agent_sleep("BARRIER")
+            self._voice("BARRIER", f"Identity '{principal}' has role {role}. '{action}' is a {action_type} operation — not in their allowed set. Downgrading and blocking.")
+
+            # Step 4: ServiceNow ticket
+            ts = datetime.now().isoformat()
+            snow = _snow_client.create_incident(TicketFields(
+                short_description="Read-only identity attempted write/control operation",
+                description=(
+                    f"Principal: {principal}\n"
+                    f"Role: {role}\n"
+                    f"Attempted action: {action} ({action_type})\n"
+                    f"Target zone: {target_zone}\n"
+                    f"Policy: Read-only identities are not permitted write/control operations.\n"
+                    f"Enforcement: READ_ONLY_DOWNGRADE applied by BARRIER."
+                ),
+                category="identity",
+                subcategory="privilege_escalation",
+                impact=2,
+                urgency=2,
+            ))
+            print(f"[ServiceNow OK] Incident created: {snow.incident_number} | Priority: 2 - High | Read-only violation: {principal} -> {action}")
+
+            incident = {
+                "incident_id":       snow.incident_number,
+                "short_description": "Read-only identity attempted write/control operation",
+                "priority":          "2 — High",
+                "state":             "New",
+                "assigned_to":       "OT Security Team",
+                "category":          "Security / Identity",
+                "created_at":        ts,
+                "principal":         principal,
+                "action":            action,
+                "enforcement":       "READ_ONLY_DOWNGRADE",
+            }
+            self._broadcast({"type": "SERVICENOW_INCIDENT", "incident": incident})
+
+            # Step 5: Chat message with escalation question
+            self._broadcast({
+                "type":    "CHAT_MESSAGE",
+                "role":    "tare",
+                "message": (
+                    f"Policy violation detected. '{principal}' is a read-only monitoring identity — "
+                    f"it is only permitted to fetch status and pull metrics. "
+                    f"It just attempted '{action}', which is a {action_type} operation. "
+                    f"BARRIER has applied READ_ONLY_DOWNGRADE and blocked the request. "
+                    f"ServiceNow {snow.incident_number} raised. "
+                    f"Was this intentional?"
+                ),
+                "show_approve": False,
+            })
+            self._broadcast(self._snapshot())
+
+            return {
+                "principal":   principal,
+                "role":        role,
+                "action":      action,
+                "action_type": action_type,
+                "target_zone": target_zone,
+                "decision":    "DENY",
+                "violation":   True,
+                "enforcement": enforcement,
+                "incident_id": snow.incident_number,
+                "question":    "Was this intentional?",
+            }
+
+        # No violation
+        self._broadcast({
+            "type":    "CHAT_MESSAGE",
+            "role":    "tare",
+            "message": (
+                f"Identity check passed. '{principal}' (role: {identity.get('role')}) "
+                f"is authorized for {action_type} operation '{action}' on {target_zone}."
+            ),
+        })
+        self._broadcast(self._snapshot())
+        return {
+            "principal":   principal,
+            "role":        identity.get("role"),
+            "action":      action,
+            "action_type": action_type,
+            "target_zone": target_zone,
+            "decision":    "ALLOW",
+            "violation":   False,
+        }
+
     # ── Demo Sequences ─────────────────────────────────────────────────────────
 
     def run_normal_ops(self):
