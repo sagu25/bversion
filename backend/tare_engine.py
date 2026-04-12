@@ -701,6 +701,7 @@ class TAREEngine:
                         ],
                     },
                 }
+                print(f"[ServiceNow ✓] Incident created: {snow.incident_number} | Priority: 1 — Critical | Assigned to: SOC Analyst")
                 self._broadcast({"type": "SERVICENOW_INCIDENT", "incident": self.active_incident})
 
         self._broadcast({
@@ -768,6 +769,7 @@ class TAREEngine:
             "created_at":        datetime.now().isoformat(),
             "evidence":          evidence,
         }
+        print(f"[ServiceNow ✓] Incident created: {snow.incident_number} | Priority: {self.active_incident['priority']} | Agent: {agent_name} | Signals: {sig_names}")
 
         self._broadcast({
             "type":    "TARE_RESPONSE",
