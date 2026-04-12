@@ -119,8 +119,7 @@ class BlueverseClient:
         resp.raise_for_status()
         data = resp.json()
 
-        # Handle common response formats
-        return (
+        result = (
             data.get("response")
             or data.get("content")
             or data.get("message")
@@ -128,6 +127,8 @@ class BlueverseClient:
             or data.get("output")
             or str(data)
         )
+        print(f"[BlueVerse ✓] {agent_name} responded via GPT-4o mini")
+        return result
 
     def invoke_safe(self, agent_name: str, message: str, fallback: str = "") -> str:
         """
